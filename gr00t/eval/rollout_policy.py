@@ -86,6 +86,9 @@ def get_robocasa_env_fn(
         from robocasa.utils.gym_utils import GrootRoboCasaEnv  # noqa: F401
         import robosuite  # noqa: F401
 
+        if env_name.startswith("gr1_mv/"):
+            import multiview_tasks  # noqa: F401  (registers gr1_mv/* envs)
+
         os.environ["MUJOCO_GL"] = "egl"
         return gym.make(env_name, enable_render=True)
 
@@ -369,6 +372,15 @@ def run_rollout_gymnasium_policy(
                     episode_infos["q_score"].append(np.max(env_infos["q_score"][env_idx]))
                 if "valid" in env_infos:
                     episode_infos["valid"].append(all(env_infos["valid"][env_idx]))
+                # Per-episode phase/diagnostic flags (e.g. from multiview_tasks), cumulative
+                # per step. After autoreset the ended episode's info lives in final_info.
+                ended_info = None
+                if "final_info" in env_infos:
+                    ended_info = env_infos["final_info"][env_idx]
+                if ended_info is not None:
+                    for key, value in ended_info.items():
+                        if key.startswith(("phase/", "diag/")):
+                            episode_infos[key].append(bool(value[-1]))
                 # Accumulate results
                 episode_lengths.append(current_lengths[env_idx])
                 episode_successes.append(current_successes[env_idx])
@@ -444,16 +456,17 @@ def run_gr00t_sim_policy(
     policy_client_port: int | None = None,
     n_envs: int = 8,
     n_action_steps: int = 8,
+    video_root: str | None = "/tmp",
 ):
+    """video_root: parent directory for the per-run video folder; None disables videos."""
     embodiment_tag = get_embodiment_tag_from_env_name(env_name)
 
-    if model_path:
-        video_dir = (
-            f"/tmp/sim_eval_videos_{model_path.replace('/', '_')}_ac{n_action_steps}_{uuid.uuid4()}"
-        )
-    else:
-        video_dir = (
-            f"/tmp/sim_eval_videos_{env_name.replace('/', '_')}_ac{n_action_steps}_{uuid.uuid4()}"
+    video_dir = None
+    if video_root is not None:
+        run_name = model_path if model_path else env_name
+        video_dir = str(
+            Path(video_root)
+            / f"sim_eval_videos_{run_name.replace('/', '_')}_ac{n_action_steps}_{uuid.uuid4()}"
         )
     wrapper_configs = WrapperConfigs(
         video=VideoConfig(
@@ -500,6 +513,12 @@ if __name__ == "__main__":
     )
     parser.add_argument("--n_envs", type=int, default=8)
     parser.add_argument("--n_action_steps", type=int, default=8)
+    parser.add_argument(
+        "--video_root",
+        type=str,
+        default="/tmp",
+        help='Parent directory for evaluation videos; "none" disables video recording.',
+    )
 
     args = parser.parse_args()
 
@@ -522,6 +541,7 @@ if __name__ == "__main__":
         policy_client_port=args.policy_client_port,
         n_envs=args.n_envs,
         n_action_steps=args.n_action_steps,
+        video_root=None if args.video_root.lower() == "none" else args.video_root,
     )
     print("results: ", results)
     print("success rate: ", np.mean(results[1]))

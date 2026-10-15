@@ -9,6 +9,8 @@ ENV_PREFIX_TO_EMBODIMENT_TAG: dict[str, EmbodimentTag] = {
     "robocasa_panda_omron": EmbodimentTag.ROBOCASA_PANDA_OMRON,
     "gr1": EmbodimentTag.GR1,
     "gr1_unified": EmbodimentTag.GR1,
+    # Multi-view task variants (multiview_tasks package)
+    "gr1_mv": EmbodimentTag.GR1,
     # Locomanipulation
     "gr00tlocomanip_g1": EmbodimentTag.UNITREE_G1,
     "gr00tlocomanip_g1_sim": EmbodimentTag.UNITREE_G1,
